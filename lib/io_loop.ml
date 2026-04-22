@@ -57,6 +57,7 @@ let words_map    = load_words ()
 let current_category = ref ""
 let current_answer   = ref ""
 
+(* Helpers *)
 let get_category () =
   let len = List.length categories in
   let idx = Random.int len in
@@ -76,6 +77,9 @@ let get_hints () =
   let words = Hashtbl.find words_map !current_category in
   let other_words = List.filter (fun w -> w <> !current_answer) words in
   other_words
+  |> List.map (fun x -> (Random.bits (), x))
+  |> List.sort (fun (a, _) (b, _) -> compare a b)
+  |> List.map snd
 
 (* Main game loop *)
 let rec game_loop possible_hints previous_guesses answer attempts =
