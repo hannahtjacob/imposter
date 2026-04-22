@@ -46,11 +46,6 @@ let load_words () =
   List.iter (fun (cat, ws) -> Hashtbl.add map cat ws) pairs;
   map
 
-let categories = load_categories ()
-let words_map = load_words ()
-let current_category = ref ""
-let current_answer = ref ""
-
 (* State *)
 let categories   = load_categories ()
 let words_map    = load_words ()
@@ -81,6 +76,83 @@ let get_hints () =
   |> List.sort (fun (a, _) (b, _) -> compare a b)
   |> List.map snd
 
+(* Display *)
+let clear_screen () =
+  print_string "\027[2J\027[H";
+  flush stdout
+
+let print_title () =
+  blank ();
+  line ();
+  Printf.printf "  %s\n" (bold (red "             IMPOSTER      "));
+  line ();
+  blank ()
+
+let print_header category =
+  Printf.printf "  %s  %s\n"
+    (bold "Category:")
+    (cyan (bold category));
+  Printf.printf "  %s\n"
+    (dim "You are the imposter. Guess the secret word using the hints.");
+  blank ();
+  line ()
+
+let print_hint_row n word =
+  blank ();
+  Printf.printf "  %s  %s\n"
+    (yellow (Printf.sprintf "[Hint %d]" n))
+    (bold word)
+
+let print_all_hints_so_far hints_seen =
+  List.iteri (fun i h -> print_hint_row (i + 1) h) hints_seen
+
+let print_status ~hints_seen ~attempts =
+  blank ();
+  line ();
+  Printf.printf "  %s used  |  %s given\n"
+    (dim (Printf.sprintf "%d attempt(s)" attempts))
+    (dim (Printf.sprintf "%d hint(s)" (List.length hints_seen)));
+  line ()
+
+let print_prompt () =
+  blank ();
+  print_string (dim "  Your guess (or 'give up'): ");
+  flush stdout
+
+let print_correct attempts =
+  blank ();
+  line ();
+  Printf.printf "  %s  Solved in %s hint(s)!\n"
+    (green (bold "✓ Correct!"))
+    (bold (string_of_int attempts));
+  line ();
+  blank ()
+
+let print_wrong guess =
+  blank ();
+  Printf.printf "  %s  \"%s\" is not the word.\n"
+    (red "X")
+    (dim guess)
+
+let print_gave_up answer =
+  blank ();
+  line ();
+  Printf.printf "  You gave up. The word was: %s\n" (cyan (bold answer));
+  line ();
+  blank ()
+
+let print_no_hints answer =
+  blank ();
+  line ();
+  Printf.printf "  Out of hints! The word was: %s\n" (cyan (bold answer));
+  line ();
+  blank ()
+
+let print_play_again () =
+  blank ();
+  print_string (dim "  Play again? (y/n): ");
+  flush stdout
+
 (* Main game loop *)
 let rec game_loop possible_hints previous_guesses answer attempts =
   let available_hints =
@@ -88,23 +160,19 @@ let rec game_loop possible_hints previous_guesses answer attempts =
   in
   match available_hints with
   | [] ->
-      print_endline ("No more hints! The word was: " ^ answer);
-      print_endline "Better luck next time!"
+      print_no_hints answer
   | _ ->
       let idx = Random.int (List.length available_hints) in
       let hint = List.nth available_hints idx in
-      Printf.printf "Hint: %s\n" hint;
-      print_string "Your guess (or type 'give up'): ";
+      print_hint_row (attempts + 1) hint;
+      print_prompt ();
       let input = String.lowercase_ascii (String.trim (read_line ())) in
-      if input = "give up" then begin
-        Printf.printf "The word was: %s\n" answer;
-        print_endline "Thanks for playing!"
-      end
-      else if input = String.lowercase_ascii answer then begin
-        Printf.printf "Correct! You got it in %d hint(s)!\n" (attempts + 1)
-      end
+      if input = "give up" then 
+        print_gave_up answer
+      else if input = String.lowercase_ascii answer then 
+        print_correct (attempts + 1)
       else begin
-        print_endline "Not quite, here's another hint...";
+        print_wrong input;
         let new_possible_hints =
           List.filter
             (fun h -> String.lowercase_ascii h <> input && h <> hint)
@@ -114,11 +182,16 @@ let rec game_loop possible_hints previous_guesses answer attempts =
         game_loop new_possible_hints new_previous_guesses answer (attempts + 1)
       end
 
-let run () =
+let rec run () =
+  clear_screen ();
+  print_title ();
   let category = get_category () in
   let answer = get_answer () in
   let possible_hints = get_hints () in
-  Printf.printf "Category: %s\n" category;
-  print_endline "Try to guess the secret word!";
-  print_endline "----------------------------";
-  game_loop possible_hints [] answer 0
+  print_header category;
+  game_loop possible_hints [] answer 0;
+  print_play_again ();
+  let again = String.lowercase_ascii (String.trim (read_line ())) in
+  if again = "y" then begin
+    run ()
+  end 
