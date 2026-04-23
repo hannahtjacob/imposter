@@ -11,4 +11,4 @@ Instructions to install and build system:
 5. Build the project:
     - dune build
 6. Run the project:
-    - dune exec bin/main.exe
+    - dune exec bin/main.exe OR dune exec imposter 
