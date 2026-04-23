@@ -1,4 +1,4 @@
-Collaboraters:
+Collaborators:
 Kashish Balan (kdb89)
 Sanaa Bhorkar (sb2759)
 Hannah Jacob (htj7)
