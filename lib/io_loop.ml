@@ -1,6 +1,4 @@
 let () = Random.self_init ()
-
-(*ANSI Color Coding for the Terminal Interface*)
 let bold s = "\027[1m" ^ s ^ "\027[0m"
 let cyan s = "\027[36m" ^ s ^ "\027[0m"
 let green s = "\027[32m" ^ s ^ "\027[0m"
