@@ -14,6 +14,15 @@ type client_msg =
   | PlayAgain of bool  (** Vote to play another round. *)
 
 (** Messages broadcast or sent privately by the server. *)
+type score_entry = {
+  player : string;
+  crew_wins : int;
+  imposter_wins : int;
+  times_caught : int;
+  rounds_played : int;
+}
+(** Per-player statistics accumulated over the session. *)
+
 type server_msg =
   | Welcome of string  (** Confirms join; payload is the assigned name. *)
   | LobbyUpdate of string list  (** Current lobby roster. *)
@@ -42,11 +51,13 @@ type server_msg =
   | YourTurnGuess of { hint : string }
       (** Imposter was correctly accused; now gets to guess the word. *)
   | RoundEnd of {
-      winner : [ `Crew | `Imposter ];
+      winner : [ `Crew | `Imposter | `Draw ];
       imposter : string;
       word : string;
       reason : string;
     }
+  | ScoreUpdate of score_entry list
+      (** Full session scoreboard, sent after every RoundEnd. *)
   | YourTurnPlayAgain
   | ServerShutdown of string
 

@@ -13,6 +13,14 @@ type client_msg =
   | ImposterGuess of string
   | PlayAgain of bool
 
+type score_entry = {
+  player : string;
+  crew_wins : int;
+  imposter_wins : int;
+  times_caught : int;
+  rounds_played : int;
+}
+
 type server_msg =
   | Welcome of string
   | LobbyUpdate of string list
@@ -40,11 +48,13 @@ type server_msg =
     }
   | YourTurnGuess of { hint : string }
   | RoundEnd of {
-      winner : [ `Crew | `Imposter ];
+      winner : [ `Crew | `Imposter | `Draw ];
       imposter : string;
       word : string;
       reason : string;
     }
+  | ScoreUpdate of score_entry list
+      (** Sent after every RoundEnd with the full session scoreboard. *)
   | YourTurnPlayAgain
   | ServerShutdown of string
 
@@ -65,6 +75,7 @@ let q s = "\"" ^ sanitize s ^ "\""
 let kv k v = q k ^ ":" ^ v
 let kv_str k v = kv k (q v)
 let kv_bool k v = kv k (if v then "true" else "false")
+let kv_int k v = kv k (string_of_int v)
 let kv_list k items = kv k ("[" ^ String.concat "," (List.map q items) ^ "]")
 let obj fields = "{" ^ String.concat "," fields ^ "}"
 
@@ -85,6 +96,7 @@ let role_str = function
 let winner_str = function
   | `Imposter -> "imposter"
   | `Crew -> "crew"
+  | `Draw -> "draw"
 
 let encode_server = function
   | Welcome name -> obj [ kv_str "type" "welcome"; kv_str "name" name ]
@@ -141,6 +153,25 @@ let encode_server = function
           kv_str "word" word;
           kv_str "reason" reason;
         ]
+  | ScoreUpdate entries ->
+      (* Encode as flat fields: count + per-entry fields indexed 0..n-1. Avoids
+         nested JSON which our hand-rolled parser cannot handle. *)
+      let n = List.length entries in
+      let count_field = kv "count" (string_of_int n) in
+      let entry_fields =
+        List.mapi
+          (fun i e ->
+            [
+              kv_str (Printf.sprintf "p%d" i) e.player;
+              kv_int (Printf.sprintf "cw%d" i) e.crew_wins;
+              kv_int (Printf.sprintf "iw%d" i) e.imposter_wins;
+              kv_int (Printf.sprintf "tc%d" i) e.times_caught;
+              kv_int (Printf.sprintf "rp%d" i) e.rounds_played;
+            ])
+          entries
+        |> List.flatten
+      in
+      obj (kv_str "type" "score_update" :: count_field :: entry_fields)
   | YourTurnPlayAgain -> obj [ kv_str "type" "your_turn_play_again" ]
   | ServerShutdown m -> obj [ kv_str "type" "shutdown"; kv_str "message" m ]
 
@@ -210,6 +241,20 @@ let parse_bool p =
       false
   | _ -> parse_error "expected bool"
 
+let parse_int p =
+  skip_ws p;
+  let start = p.pos in
+  (match peek p with
+  | Some '-' -> advance p
+  | _ -> ());
+  while
+    p.pos < String.length p.src && p.src.[p.pos] >= '0' && p.src.[p.pos] <= '9'
+  do
+    advance p
+  done;
+  if p.pos = start then parse_error "expected integer";
+  int_of_string (String.sub p.src start (p.pos - start))
+
 (* Returns string list. The encoder only ever emits string lists. *)
 let parse_string_list p =
   expect p '[';
@@ -234,12 +279,14 @@ let parse_string_list p =
   List.rev !items
 
 (* Parse one field. Returns (key, value) where value is one of: `Str s | `Bool b
-   | `Null | `List xs *)
+   | `Null | `List xs | `Int n | `Obj fields *)
 type field_value =
   [ `Str of string
   | `Bool of bool
   | `Null
   | `List of string list
+  | `Int of int
+  | `Obj of (string * field_value) list
   ]
 
 let parse_field p : string * field_value =
@@ -254,6 +301,7 @@ let parse_field p : string * field_value =
         parse_literal p "null";
         `Null
     | Some '[' -> `List (parse_string_list p)
+    | Some c when (c >= '0' && c <= '9') || c = '-' -> `Int (parse_int p)
     | Some c -> parse_error (Printf.sprintf "unexpected char '%c' in value" c)
     | None -> parse_error "EOF in value"
   in
@@ -303,6 +351,11 @@ let get_str_or_null fields k =
   | Some `Null -> None
   | _ -> parse_error ("missing string-or-null field: " ^ k)
 
+let get_int fields k =
+  match List.assoc_opt k fields with
+  | Some (`Int n) -> n
+  | _ -> parse_error ("missing or non-integer field: " ^ k)
+
 let decode_client line =
   try
     let p = { src = line; pos = 0 } in
@@ -325,6 +378,7 @@ let role_of_string = function
 let winner_of_string = function
   | "imposter" -> `Imposter
   | "crew" -> `Crew
+  | "draw" -> `Draw
   | s -> parse_error ("bad winner: " ^ s)
 
 let decode_server line =
@@ -376,6 +430,19 @@ let decode_server line =
                word = get_str fields "word";
                reason = get_str fields "reason";
              })
+    | "score_update" ->
+        let n = get_int fields "count" in
+        let entries =
+          List.init n (fun i ->
+              {
+                player = get_str fields (Printf.sprintf "p%d" i);
+                crew_wins = get_int fields (Printf.sprintf "cw%d" i);
+                imposter_wins = get_int fields (Printf.sprintf "iw%d" i);
+                times_caught = get_int fields (Printf.sprintf "tc%d" i);
+                rounds_played = get_int fields (Printf.sprintf "rp%d" i);
+              })
+        in
+        Ok (ScoreUpdate entries)
     | "your_turn_play_again" -> Ok YourTurnPlayAgain
     | "shutdown" -> Ok (ServerShutdown (get_str fields "message"))
     | t -> Error ("unknown server message type: " ^ t)

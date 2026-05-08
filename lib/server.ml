@@ -43,6 +43,38 @@ let events_mu = Mutex.create ()
 let events_cv = Condition.create ()
 let lobby_open = ref true (* whether new connections become players *)
 
+(* ---------- Scoreboard ---------- *)
+
+(* Keyed by player name. Survives across rounds for the whole server session. *)
+let scores : (string, Protocol.score_entry) Hashtbl.t = Hashtbl.create 16
+
+let get_or_init_score name =
+  match Hashtbl.find_opt scores name with
+  | Some e -> e
+  | None ->
+      let e =
+        {
+          Protocol.player = name;
+          crew_wins = 0;
+          imposter_wins = 0;
+          times_caught = 0;
+          rounds_played = 0;
+        }
+      in
+      Hashtbl.add scores name e;
+      e
+
+let update_score name f =
+  let entry = get_or_init_score name in
+  Hashtbl.replace scores name (f entry)
+
+let current_scoreboard () =
+  Hashtbl.fold (fun _ e acc -> e :: acc) scores []
+  |> List.sort (fun a b ->
+      let wins_a = a.Protocol.crew_wins + a.Protocol.imposter_wins in
+      let wins_b = b.Protocol.crew_wins + b.Protocol.imposter_wins in
+      compare wins_b wins_a)
+
 (* ---------- Helpers ---------- *)
 
 let with_mutex mu f =
@@ -296,6 +328,37 @@ let host_id () =
   | [] -> None
   | c :: _ -> Some c.id
 
+(* Update the scoreboard for all players after a round, then broadcast it. *)
+let record_and_broadcast_scores ~players ~imposter_name ~winner ~imposter_caught
+    =
+  List.iter
+    (fun c ->
+      let is_imposter =
+        String.lowercase_ascii c.name = String.lowercase_ascii imposter_name
+      in
+      update_score c.name (fun e ->
+          let rounds_played = e.Protocol.rounds_played + 1 in
+          if is_imposter then
+            let imposter_wins =
+              match winner with
+              | `Imposter -> e.Protocol.imposter_wins + 1
+              | `Crew | `Draw -> e.Protocol.imposter_wins
+            in
+            let times_caught =
+              if imposter_caught then e.Protocol.times_caught + 1
+              else e.Protocol.times_caught
+            in
+            { e with Protocol.imposter_wins; times_caught; rounds_played }
+          else
+            let crew_wins =
+              match winner with
+              | `Crew -> e.Protocol.crew_wins + 1
+              | `Imposter | `Draw -> e.Protocol.crew_wins
+            in
+            { e with Protocol.crew_wins; rounds_played }))
+    players;
+  broadcast (Protocol.ScoreUpdate (current_scoreboard ()))
+
 let play_round () =
   let players = all_clients () |> List.sort (fun a b -> compare a.id b.id) in
   if List.length players < 3 then begin
@@ -426,14 +489,15 @@ let play_round () =
     broadcast
       (Protocol.RoundEnd
          {
-           winner = `Imposter;
+           winner = `Draw;
            imposter = imposter.name;
            word;
-           reason = "vote was tied — imposter slips away";
+           reason = "vote was tied — no winner";
          });
-    ()
+    record_and_broadcast_scores ~players ~imposter_name:imposter.name
+      ~winner:`Draw ~imposter_caught:false
   end
-  else if not was_imposter then
+  else if not was_imposter then begin
     broadcast
       (Protocol.RoundEnd
          {
@@ -441,16 +505,13 @@ let play_round () =
            imposter = imposter.name;
            word;
            reason = "crew accused the wrong player";
-         })
+         });
+    record_and_broadcast_scores ~players ~imposter_name:imposter.name
+      ~winner:`Imposter ~imposter_caught:false
+  end
   else begin
     (* Imposter accused — give them one guess. *)
-    let collected_clues =
-      (* This is a UX nicety: we already broadcast all clues, so we don't need
-         to resend. But the imposter prompt includes "the clues so far"
-         conceptually — clients have them already. We just pass an empty hint
-         string; clients can show their own log. *)
-      ""
-    in
+    let collected_clues = "" in
     send_to imposter (Protocol.YourTurnGuess { hint = collected_clues });
     let rec await_guess () =
       match wait_for_msg_from imposter.id with
@@ -464,7 +525,7 @@ let play_round () =
     let correct =
       String.lowercase_ascii (String.trim guess) = String.lowercase_ascii word
     in
-    if correct then
+    if correct then begin
       broadcast
         (Protocol.RoundEnd
            {
@@ -472,8 +533,11 @@ let play_round () =
              imposter = imposter.name;
              word;
              reason = "imposter was caught but guessed the word";
-           })
-    else
+           });
+      record_and_broadcast_scores ~players ~imposter_name:imposter.name
+        ~winner:`Imposter ~imposter_caught:true
+    end
+    else begin
       broadcast
         (Protocol.RoundEnd
            {
@@ -481,7 +545,10 @@ let play_round () =
              imposter = imposter.name;
              word;
              reason = "imposter caught and failed to guess the word";
-           })
+           });
+      record_and_broadcast_scores ~players ~imposter_name:imposter.name
+        ~winner:`Crew ~imposter_caught:true
+    end
   end
 
 (* Returns true if all surviving players want to play again. *)
@@ -556,7 +623,6 @@ let game_loop () =
       (try play_round ()
        with Round_aborted msg ->
          broadcast (Protocol.Error ("round aborted: " ^ msg)));
-      drain_events ();
       let again = play_again_phase () in
       if again then begin
         drain_events ();

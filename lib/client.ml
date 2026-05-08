@@ -111,6 +111,7 @@ let render_round_end ~winner ~imposter ~word ~reason =
     match winner with
     | `Crew -> green (bold "CREW WINS")
     | `Imposter -> red (bold "IMPOSTER WINS")
+    | `Draw -> yellow (bold "DRAW — no winner")
   in
   Printf.printf "  %s\n" winner_str;
   Printf.printf "  Imposter was: %s\n" (bold imposter);
@@ -123,6 +124,23 @@ let render_lobby players =
   Printf.printf "  %s %s (%d)\n" (dim "Lobby:")
     (String.concat ", " players)
     (List.length players);
+  flush stdout
+
+let render_scoreboard entries =
+  print_newline ();
+  print_line ();
+  Printf.printf "  %s\n" (bold (yellow "       SCOREBOARD"));
+  print_line ();
+  Printf.printf "  %-16s  %6s  %6s  %6s  %6s\n" "Player" "Wins" "Imp W" "Caught"
+    "Rounds";
+  print_line ();
+  List.iter
+    (fun (e : Protocol.score_entry) ->
+      let total_wins = e.crew_wins + e.imposter_wins in
+      Printf.printf "  %-16s  %6d  %6d  %6d  %6d\n" e.player total_wins
+        e.imposter_wins e.times_caught e.rounds_played)
+    entries;
+  print_line ();
   flush stdout
 
 (* ---------- Reader thread ---------- *)
@@ -177,8 +195,10 @@ let reader_loop in_chan =
                 flush stdout
             | Protocol.RoundEnd { winner; imposter; word; reason } ->
                 render_round_end ~winner ~imposter ~word ~reason
+            | Protocol.ScoreUpdate entries -> render_scoreboard entries
             | Protocol.YourTurnPlayAgain ->
                 set_prompt PlayAgain_pending;
+                print_newline ();
                 print_string (dim "  Play again? (y/n): ");
                 flush stdout
             | Protocol.ServerShutdown m ->
