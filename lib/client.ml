@@ -121,8 +121,13 @@ let render_round_end ~winner ~imposter ~word ~reason =
   print_newline ()
 
 let render_lobby players =
+  let labeled =
+  match players with
+  | [] -> []
+  | host :: rest -> (bold host ^ " 👑") :: rest
+  in
   Printf.printf "  %s %s (%d)\n" (dim "Lobby:")
-    (String.concat ", " players)
+    (String.concat ", " labeled)
     (List.length players);
   flush stdout
 
@@ -190,8 +195,7 @@ let reader_loop in_chan =
                 print_newline ();
                 print_string
                   (dim
-                     "  You're the imposter and you've been caught. Guess the \
-                      word: ");
+                     "  You're the imposter and you've been caught. Guess the word: ");
                 flush stdout
             | Protocol.RoundEnd { winner; imposter; word; reason } ->
                 render_round_end ~winner ~imposter ~word ~reason
@@ -309,5 +313,5 @@ let run ~host ~port ~name =
   let out_chan = Unix.out_channel_of_descr sock in
   send out_chan (Protocol.Join name);
   let _reader : Thread.t = Thread.create reader_loop in_chan in
-  print_endline (dim "  (Once everyone has joined, the host types 'start'.)");
+  print_endline (dim "  (The 👑 host types 'start' once everyone has joined.)");
   main_loop out_chan

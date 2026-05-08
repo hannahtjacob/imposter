@@ -511,6 +511,7 @@ let play_round () =
   end
   else begin
     (* Imposter accused — give them one guess. *)
+    drain_events (); 
     let collected_clues = "" in
     send_to imposter (Protocol.YourTurnGuess { hint = collected_clues });
     let rec await_guess () =
