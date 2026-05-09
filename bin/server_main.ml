@@ -9,4 +9,4 @@ let () =
         exit 1)
     else 4000
   in
-  Imposter.Server.run ~port
+  Server.run ~port

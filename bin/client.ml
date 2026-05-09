@@ -5,6 +5,8 @@
    we're currently expecting input — when not, stdin is ignored (read but
    discarded with a hint). *)
 
+open Imposter
+
 (* ---------- Display helpers (mirrors the original io_loop.ml style)
    ---------- *)
 
@@ -122,9 +124,9 @@ let render_round_end ~winner ~imposter ~word ~reason =
 
 let render_lobby players =
   let labeled =
-  match players with
-  | [] -> []
-  | host :: rest -> (bold host ^ " 👑") :: rest
+    match players with
+    | [] -> []
+    | host :: rest -> (bold host ^ " 👑") :: rest
   in
   Printf.printf "  %s %s (%d)\n" (dim "Lobby:")
     (String.concat ", " labeled)
@@ -195,7 +197,8 @@ let reader_loop in_chan =
                 print_newline ();
                 print_string
                   (dim
-                     "  You're the imposter and you've been caught. Guess the word: ");
+                     "  You're the imposter and you've been caught. Guess the \
+                      word: ");
                 flush stdout
             | Protocol.RoundEnd { winner; imposter; word; reason } ->
                 render_round_end ~winner ~imposter ~word ~reason

@@ -368,7 +368,9 @@ let decode_client line =
     | "imposter_guess" -> Ok (ImposterGuess (get_str fields "guess"))
     | "play_again" -> Ok (PlayAgain (get_bool fields "yes"))
     | t -> Error ("unknown client message type: " ^ t)
-  with Parse_error m -> Error m
+  with
+  | Parse_error m -> Error m
+  | Failure m -> Error m
 
 let role_of_string = function
   | "imposter" -> `Imposter
@@ -446,4 +448,6 @@ let decode_server line =
     | "your_turn_play_again" -> Ok YourTurnPlayAgain
     | "shutdown" -> Ok (ServerShutdown (get_str fields "message"))
     | t -> Error ("unknown server message type: " ^ t)
-  with Parse_error m -> Error m
+  with
+  | Parse_error m -> Error m
+  | Failure m -> Error m

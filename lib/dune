@@ -1,3 +1,4 @@
 (library
  (name imposter)
- (libraries unix threads.posix))
+ (preprocess
+  (pps bisect_ppx)))

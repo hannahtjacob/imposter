@@ -13,4 +13,4 @@ let () =
       exit 1
   in
   let name = Sys.argv.(3) in
-  Imposter.Client.run ~host ~port ~name
+  Client.run ~host ~port ~name

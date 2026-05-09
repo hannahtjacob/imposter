@@ -1,4 +1,7 @@
 let () = Random.self_init ()
+
+open Imposter
+
 let bold s = "\027[1m" ^ s ^ "\027[0m"
 let cyan s = "\027[36m" ^ s ^ "\027[0m"
 let green s = "\027[32m" ^ s ^ "\027[0m"
@@ -19,17 +22,14 @@ let current_answer = ref ""
 
 (* Helpers *)
 let get_category () =
-  let len = List.length categories in
-  let idx = Random.int len in
-  let cat = List.nth categories idx in
+  let cat = Single_player.random_category categories in
   current_category := cat;
   cat
 
 let get_answer () =
-  let words = Hashtbl.find words_map !current_category in
-  let len = List.length words in
-  let idx = Random.int len in
-  let ans = List.nth words idx in
+  let ans =
+    Single_player.random_answer ~words_map ~category:!current_category
+  in
   current_answer := ans;
   ans
 
@@ -96,29 +96,30 @@ let print_play_again () =
 (* Main game loop *)
 let rec game_loop possible_hints previous_guesses answer attempts =
   let available_hints =
-    List.filter (fun h -> not (List.mem h previous_guesses)) possible_hints
+    Single_player.unused_hints ~possible_hints ~previous_guesses
   in
   match available_hints with
   | [] -> print_no_hints answer
-  | _ ->
+  | _ -> (
       let idx = Random.int (List.length available_hints) in
       let hint = List.nth available_hints idx in
       print_hint_row (attempts + 1) hint;
       print_prompt ();
-      let input = String.lowercase_ascii (String.trim (read_line ())) in
-      if input = "give up" then print_gave_up answer
-      else if input = String.lowercase_ascii answer then
-        print_correct (attempts + 1)
-      else begin
-        print_wrong input;
-        let new_possible_hints =
-          List.filter
-            (fun h -> String.lowercase_ascii h <> input && h <> hint)
-            possible_hints
-        in
-        let new_previous_guesses = input :: previous_guesses in
-        game_loop new_possible_hints new_previous_guesses answer (attempts + 1)
-      end
+      match Single_player.normalize_guess (read_line ()) with
+      | Give_up -> print_gave_up answer
+      | Guess input ->
+          if Single_player.is_correct ~answer input then
+            print_correct (attempts + 1)
+          else begin
+            print_wrong input;
+            let new_possible_hints =
+              Single_player.remove_hint_and_guess ~possible_hints ~hint
+                ~guess:input
+            in
+            let new_previous_guesses = input :: previous_guesses in
+            game_loop new_possible_hints new_previous_guesses answer
+              (attempts + 1)
+          end)
 
 let rec run () =
   clear_screen ();
@@ -133,23 +134,3 @@ let rec run () =
   if again = "y" then begin
     run ()
   end
-
-module Test = struct
-  let bold = bold
-  let cyan = cyan
-  let green = green
-  let red = red
-  let yellow = yellow
-  let dim = dim
-  let clear_screen = clear_screen
-  let print_header = print_header
-  let print_hint_row = print_hint_row
-  let print_prompt = print_prompt
-  let print_correct = print_correct
-  let print_wrong = print_wrong
-  let print_gave_up = print_gave_up
-  let print_no_hints = print_no_hints
-  let get_category = get_category
-  let get_answer = get_answer
-  let game_loop = game_loop
-end

@@ -1,5 +1,12 @@
-(test
+(executable
  (name test_imposter)
- (deps
-  (glob_files_rec ../data/*))
  (libraries imposter ounit2))
+
+(rule
+ (alias runtest)
+ (deps
+  (:test test_imposter.exe)
+  (glob_files_rec ../data/*)
+  (universe))
+ (action
+  (run %{test})))

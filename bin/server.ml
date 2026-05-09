@@ -15,6 +15,8 @@
    This keeps the game logic itself purely sequential and easy to read, which
    matches the existing single-player code's style. *)
 
+open Imposter
+
 (* ---------- Client table ---------- *)
 
 type client = {
@@ -511,7 +513,7 @@ let play_round () =
   end
   else begin
     (* Imposter accused — give them one guess. *)
-    drain_events (); 
+    drain_events ();
     let collected_clues = "" in
     send_to imposter (Protocol.YourTurnGuess { hint = collected_clues });
     let rec await_guess () =
