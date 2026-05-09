@@ -40,14 +40,18 @@ type server_msg =
       clue : string;
     }
   | YourTurnVote of { candidates : string list }
+      (** Server prompts this client to vote; [candidates] is the full player
+          list. *)
   | VotePosted of {
       voter : string;
       voted_for : string;
-    }
+    }  (** Broadcast when any player casts a vote. *)
   | Accused of {
       player : string;
       was_imposter : bool;
     }
+      (** Broadcast after voting; names the player with the most votes and
+          whether they were actually the imposter. *)
   | YourTurnGuess of { hint : string }
       (** Imposter was correctly accused; now gets to guess the word. *)
   | RoundEnd of {
@@ -55,11 +59,13 @@ type server_msg =
       imposter : string;
       word : string;
       reason : string;
-    }
+    }  (** Broadcast at the end of every round with the outcome. *)
   | ScoreUpdate of score_entry list
       (** Full session scoreboard, sent after every RoundEnd. *)
   | YourTurnPlayAgain
+      (** Server asks this client whether they want to play another round. *)
   | ServerShutdown of string
+      (** Server is closing; payload is a farewell message. *)
 
 val encode_client : client_msg -> string
 (** Encode a client message as a single line (no trailing newline). *)

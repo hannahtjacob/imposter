@@ -30,8 +30,8 @@ type client = {
 
 (* Events flowing to the game thread. *)
 type event =
-  | Msg of int * Protocol.client_msg  (** client id, message *)
-  | Disconnected of int  (** client id dropped *)
+  | Msg of int * Protocol.client_msg (* client id, message *)
+  | Disconnected of int (* client id dropped *)
 
 (* ---------- Shared state ---------- *)
 

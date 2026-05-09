@@ -2,16 +2,7 @@ let () = Random.self_init ()
 
 open Imposter
 
-let bold s = "\027[1m" ^ s ^ "\027[0m"
-let cyan s = "\027[36m" ^ s ^ "\027[0m"
-let green s = "\027[32m" ^ s ^ "\027[0m"
-let red s = "\027[31m" ^ s ^ "\027[0m"
-let yellow s = "\027[33m" ^ s ^ "\027[0m"
-let dim s = "\027[2m" ^ s ^ "\027[0m"
-
-(*Layout*)
-let line () = print_endline (dim "────────────────────────────────────────")
-
+(* Layout *)
 let blank () = print_newline ()
 
 (* State *)
@@ -40,57 +31,64 @@ let clear_screen () =
 
 let print_title () =
   blank ();
-  line ();
-  Printf.printf "  %s\n" (bold (red "             IMPOSTER      "));
-  line ();
+  Display.line ();
+  Printf.printf "  %s\n"
+    (Display.bold (Display.red "             IMPOSTER      "));
+  Display.line ();
   blank ()
 
 let print_header category =
-  Printf.printf "  %s  %s\n" (bold "Category:") (cyan (bold category));
+  Printf.printf "  %s  %s\n" (Display.bold "Category:")
+    (Display.cyan (Display.bold category));
   Printf.printf "  %s\n"
-    (dim "You are the imposter. Guess the secret word using the hints.");
+    (Display.dim "You are the imposter. Guess the secret word using the hints.");
   blank ();
-  line ()
+  Display.line ()
 
 let print_hint_row n word =
   blank ();
-  Printf.printf "  %s  %s\n" (yellow (Printf.sprintf "[Hint %d]" n)) (bold word)
+  Printf.printf "  %s  %s\n"
+    (Display.yellow (Printf.sprintf "[Hint %d]" n))
+    (Display.bold word)
 
 let print_prompt () =
   blank ();
-  print_string (dim "  Your guess (or 'give up'): ");
+  print_string (Display.dim "  Your guess (or 'give up'): ");
   flush stdout
 
 let print_correct attempts =
   blank ();
-  line ();
+  Display.line ();
   Printf.printf "  %s  Solved in %s hint(s)!\n"
-    (green (bold "✓ Correct!"))
-    (bold (string_of_int attempts));
-  line ();
+    (Display.green (Display.bold "✓ Correct!"))
+    (Display.bold (string_of_int attempts));
+  Display.line ();
   blank ()
 
 let print_wrong guess =
   blank ();
-  Printf.printf "  %s  \"%s\" is not the word.\n" (red "X") (dim guess)
+  Printf.printf "  %s  \"%s\" is not the word.\n" (Display.red "X")
+    (Display.dim guess)
 
 let print_gave_up answer =
   blank ();
-  line ();
-  Printf.printf "  You gave up. The word was: %s\n" (cyan (bold answer));
-  line ();
+  Display.line ();
+  Printf.printf "  You gave up. The word was: %s\n"
+    (Display.cyan (Display.bold answer));
+  Display.line ();
   blank ()
 
 let print_no_hints answer =
   blank ();
-  line ();
-  Printf.printf "  Out of hints! The word was: %s\n" (cyan (bold answer));
-  line ();
+  Display.line ();
+  Printf.printf "  Out of hints! The word was: %s\n"
+    (Display.cyan (Display.bold answer));
+  Display.line ();
   blank ()
 
 let print_play_again () =
   blank ();
-  print_string (dim "  Play again? (y/n): ");
+  print_string (Display.dim "  Play again? (y/n): ");
   flush stdout
 
 (* Main game loop *)

@@ -54,7 +54,7 @@ type server_msg =
       reason : string;
     }
   | ScoreUpdate of score_entry list
-      (** Sent after every RoundEnd with the full session scoreboard. *)
+    (* Sent after every RoundEnd with the full session scoreboard. *)
   | YourTurnPlayAgain
   | ServerShutdown of string
 
@@ -71,12 +71,15 @@ let sanitize s =
     s;
   Buffer.contents buf
 
-let q s = "\"" ^ sanitize s ^ "\""
-let kv k v = q k ^ ":" ^ v
-let kv_str k v = kv k (q v)
+let quote_str s = "\"" ^ sanitize s ^ "\""
+let kv k v = quote_str k ^ ":" ^ v
+let kv_str k v = kv k (quote_str v)
 let kv_bool k v = kv k (if v then "true" else "false")
 let kv_int k v = kv k (string_of_int v)
-let kv_list k items = kv k ("[" ^ String.concat "," (List.map q items) ^ "]")
+
+let kv_list k items =
+  kv k ("[" ^ String.concat "," (List.map quote_str items) ^ "]")
+
 let obj fields = "{" ^ String.concat "," fields ^ "}"
 
 (* ---------- Encoding ---------- *)
