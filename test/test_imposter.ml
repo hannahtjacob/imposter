@@ -1,6 +1,20 @@
 open OUnit2
 
 let pp_string_list xs = "[" ^ String.concat "; " xs ^ "]"
+let pp_string s = s
+let pp_int = string_of_int
+let pp_char c = String.make 1 c
+
+let pp_guess = function
+  | Imposter.Single_player.Give_up -> "Give_up"
+  | Imposter.Single_player.Guess s -> "Guess \"" ^ s ^ "\""
+
+let pp_client_msg msg = Imposter.Protocol.encode_client msg
+let pp_server_msg msg = Imposter.Protocol.encode_server msg
+
+let pp_result pp = function
+  | Ok v -> "Ok (" ^ pp v ^ ")"
+  | Error e -> "Error \"" ^ e ^ "\""
 
 let assert_ok_equal ?printer expected actual =
   match actual with
@@ -19,8 +33,8 @@ let make_words_map pairs =
 
 let test_load_categories _ =
   let categories = Imposter.Game.load_categories () in
-  assert_equal "Animals" (List.hd categories);
-  assert_equal 50 (List.length categories);
+  assert_equal ~printer:(fun x -> x) "Animals" (List.hd categories);
+  assert_equal ~printer:string_of_int 50 (List.length categories);
   assert_bool "TV genres category present" (List.mem "TV genres" categories)
 
 let test_load_words _ =
@@ -29,14 +43,14 @@ let test_load_words _ =
   let fruits = Hashtbl.find words_map "Fruits" in
   assert_bool "lion present" (List.exists (( = ) "lion") animals);
   assert_bool "shark present" (List.exists (( = ) "shark") animals);
-  assert_equal 9 (List.length animals);
+  assert_equal ~printer:string_of_int 9 (List.length animals);
   assert_bool "apple present" (List.exists (( = ) "apple") fruits)
 
 let test_get_hints _ =
   let words_map = Imposter.Game.load_words () in
   Random.init 0;
   let hints = Imposter.Game.get_hints words_map "Animals" "lion" in
-  assert_equal 8 (List.length hints);
+  assert_equal ~printer:string_of_int 8 (List.length hints);
   assert_bool "answer excluded" (not (List.exists (( = ) "lion") hints));
   assert_equal ~printer:pp_string_list
     (List.sort String.compare
@@ -70,7 +84,8 @@ let test_random_category _ =
   let categories = [ "Animals"; "Fruits"; "Sports" ] in
   let category = Imposter.Single_player.random_category categories in
   assert_bool "category came from input" (List.mem category categories);
-  assert_equal "Only" (Imposter.Single_player.random_category [ "Only" ]);
+  assert_equal ~printer:pp_string "Only"
+    (Imposter.Single_player.random_category [ "Only" ]);
   assert_raises (Invalid_argument "cannot choose from an empty list") (fun () ->
       ignore (Imposter.Single_player.random_category []))
 
@@ -81,7 +96,7 @@ let test_random_answer _ =
     Imposter.Single_player.random_answer ~words_map ~category:"Animals"
   in
   assert_bool "answer came from category" (List.mem answer [ "lion"; "tiger" ]);
-  assert_equal "solo"
+  assert_equal ~printer:pp_string "solo"
     (Imposter.Single_player.random_answer
        ~words_map:(make_words_map [ ("Only", [ "solo" ]) ])
        ~category:"Only");
@@ -90,15 +105,15 @@ let test_random_answer _ =
         (Imposter.Single_player.random_answer ~words_map ~category:"Missing"))
 
 let test_normalize_guess _ =
-  assert_equal Imposter.Single_player.Give_up
+  assert_equal ~printer:pp_guess Imposter.Single_player.Give_up
     (Imposter.Single_player.normalize_guess "  GIVE UP  ");
-  assert_equal (Imposter.Single_player.Guess "orange")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "orange")
     (Imposter.Single_player.normalize_guess "  Orange  ");
-  assert_equal (Imposter.Single_player.Guess "give  up")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "give  up")
     (Imposter.Single_player.normalize_guess "give  up");
-  assert_equal (Imposter.Single_player.Guess "pear pie")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "pear pie")
     (Imposter.Single_player.normalize_guess " Pear Pie ");
-  assert_equal (Imposter.Single_player.Guess "")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "")
     (Imposter.Single_player.normalize_guess "   ")
 
 let test_is_correct _ =
@@ -252,7 +267,8 @@ let test_client_protocol_round_trips _ =
       let encoded = Imposter.Protocol.encode_client msg in
       assert_bool "client encoding has no newline"
         (not (String.contains encoded '\n'));
-      assert_ok_equal msg (Imposter.Protocol.decode_client encoded))
+      assert_ok_equal ~printer:pp_client_msg msg
+        (Imposter.Protocol.decode_client encoded))
     client_messages
 
 let test_server_protocol_round_trips _ =
@@ -261,17 +277,21 @@ let test_server_protocol_round_trips _ =
       let encoded = Imposter.Protocol.encode_server msg in
       assert_bool "server encoding has no newline"
         (not (String.contains encoded '\n'));
-      assert_ok_equal msg (Imposter.Protocol.decode_server encoded))
+      assert_ok_equal ~printer:pp_server_msg msg
+        (Imposter.Protocol.decode_server encoded))
     server_messages
 
 let test_protocol_sanitizes_encoded_strings _ =
-  assert_equal (Ok (Imposter.Protocol.Join "A_B_C"))
+  assert_equal ~printer:(pp_result pp_client_msg)
+    (Ok (Imposter.Protocol.Join "A_B_C"))
     (Imposter.Protocol.decode_client
        (Imposter.Protocol.encode_client (Imposter.Protocol.Join "A\"B\\C")));
-  assert_equal (Ok (Imposter.Protocol.Clue "two words"))
+  assert_equal ~printer:(pp_result pp_client_msg)
+    (Ok (Imposter.Protocol.Clue "two words"))
     (Imposter.Protocol.decode_client
        (Imposter.Protocol.encode_client (Imposter.Protocol.Clue "two\twords")));
-  assert_equal (Ok (Imposter.Protocol.Error "bad input"))
+  assert_equal ~printer:(pp_result pp_server_msg)
+    (Ok (Imposter.Protocol.Error "bad input"))
     (Imposter.Protocol.decode_server
        (Imposter.Protocol.encode_server (Imposter.Protocol.Error "bad\ninput")))
 
@@ -447,7 +467,7 @@ let test_load_words_exact_representative_categories _ =
 let test_load_words_matches_category_file _ =
   let categories = Imposter.Game.load_categories () in
   let words_map = Imposter.Game.load_words () in
-  assert_equal 50 (Hashtbl.length words_map);
+  assert_equal ~printer:string_of_int 50 (Hashtbl.length words_map);
   List.iter
     (fun category ->
       assert_bool
@@ -455,7 +475,7 @@ let test_load_words_matches_category_file _ =
         (Hashtbl.mem words_map category);
       assert_equal
         ~msg:("word count for " ^ category)
-        9
+        ~printer:string_of_int 9
         (List.length (Hashtbl.find words_map category)))
     categories
 
@@ -465,7 +485,7 @@ let test_get_hints_preserves_non_answer_duplicates _ =
   in
   Random.init 3;
   let hints = Imposter.Game.get_hints words_map "Food" "pie" in
-  assert_equal 3 (List.length hints);
+  assert_equal ~printer:string_of_int 3 (List.length hints);
   assert_equal ~printer:pp_string_list [ "cake"; "cake"; "tart" ]
     (List.sort String.compare hints)
 
@@ -480,21 +500,21 @@ let test_choose_random_singleton_paths _ =
   let words_map =
     make_words_map [ ("Only category", [ "only answer" ]); ("Empty", []) ]
   in
-  assert_equal "Only category"
+  assert_equal ~printer:pp_string "Only category"
     (Imposter.Single_player.random_category [ "Only category" ]);
-  assert_equal "only answer"
+  assert_equal ~printer:pp_string "only answer"
     (Imposter.Single_player.random_answer ~words_map ~category:"Only category");
   assert_raises (Invalid_argument "cannot choose from an empty list") (fun () ->
       ignore (Imposter.Single_player.random_answer ~words_map ~category:"Empty"))
 
 let test_normalize_guess_ascii_only_case_folding _ =
-  assert_equal (Imposter.Single_player.Guess "resume")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "resume")
     (Imposter.Single_player.normalize_guess " ReSuMe ");
-  assert_equal (Imposter.Single_player.Guess "give up!")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "give up!")
     (Imposter.Single_player.normalize_guess " GIVE UP! ");
-  assert_equal (Imposter.Single_player.Guess "give up please")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "give up please")
     (Imposter.Single_player.normalize_guess "give up please");
-  assert_equal (Imposter.Single_player.Guess "two\twords")
+  assert_equal ~printer:pp_guess (Imposter.Single_player.Guess "two\twords")
     (Imposter.Single_player.normalize_guess " Two\tWords ")
 
 let test_is_correct_trims_guess_but_not_answer _ =
@@ -549,8 +569,10 @@ let test_encode_client_exact_shapes _ =
   in
   List.iter
     (fun (msg, encoded) ->
-      assert_equal encoded (Imposter.Protocol.encode_client msg);
-      assert_equal (Ok msg) (Imposter.Protocol.decode_client encoded))
+      assert_equal ~printer:pp_string encoded
+        (Imposter.Protocol.encode_client msg);
+      assert_equal ~printer:(pp_result pp_client_msg) (Ok msg)
+        (Imposter.Protocol.decode_client encoded))
     cases
 
 let test_encode_server_exact_simple_shapes _ =
@@ -582,8 +604,10 @@ let test_encode_server_exact_simple_shapes _ =
   in
   List.iter
     (fun (msg, encoded) ->
-      assert_equal encoded (Imposter.Protocol.encode_server msg);
-      assert_equal (Ok msg) (Imposter.Protocol.decode_server encoded))
+      assert_equal ~printer:pp_string encoded
+        (Imposter.Protocol.encode_server msg);
+      assert_equal ~printer:(pp_result pp_server_msg) (Ok msg)
+        (Imposter.Protocol.decode_server encoded))
     cases
 
 let test_encode_server_exact_round_start_shapes _ =
@@ -613,10 +637,14 @@ let test_encode_server_exact_round_start_shapes _ =
   let imposter_encoded =
     "{\"type\":\"round_start\",\"category\":\"Animals\",\"role\":\"imposter\",\"word\":null,\"players\":[\"Ada\",\"Grace\"],\"clue_order\":[]}"
   in
-  assert_equal crew_encoded (Imposter.Protocol.encode_server crew);
-  assert_equal (Ok crew) (Imposter.Protocol.decode_server crew_encoded);
-  assert_equal imposter_encoded (Imposter.Protocol.encode_server imposter);
-  assert_equal (Ok imposter) (Imposter.Protocol.decode_server imposter_encoded)
+  assert_equal ~printer:pp_string crew_encoded
+    (Imposter.Protocol.encode_server crew);
+  assert_equal ~printer:(pp_result pp_server_msg) (Ok crew)
+    (Imposter.Protocol.decode_server crew_encoded);
+  assert_equal ~printer:pp_string imposter_encoded
+    (Imposter.Protocol.encode_server imposter);
+  assert_equal ~printer:(pp_result pp_server_msg) (Ok imposter)
+    (Imposter.Protocol.decode_server imposter_encoded)
 
 let test_encode_server_exact_round_end_shapes _ =
   let cases =
@@ -642,8 +670,10 @@ let test_encode_server_exact_round_end_shapes _ =
   in
   List.iter
     (fun (msg, encoded) ->
-      assert_equal encoded (Imposter.Protocol.encode_server msg);
-      assert_equal (Ok msg) (Imposter.Protocol.decode_server encoded))
+      assert_equal ~printer:pp_string encoded
+        (Imposter.Protocol.encode_server msg);
+      assert_equal ~printer:(pp_result pp_server_msg) (Ok msg)
+        (Imposter.Protocol.decode_server encoded))
     cases
 
 let test_encode_server_exact_score_update_shape _ =
@@ -669,11 +699,13 @@ let test_encode_server_exact_score_update_shape _ =
   let encoded =
     "{\"type\":\"score_update\",\"count\":2,\"p0\":\"Ada\",\"cw0\":10,\"iw0\":0,\"tc0\":1,\"rp0\":11,\"p1\":\"Grace\",\"cw1\":1,\"iw1\":9,\"tc1\":2,\"rp1\":12}"
   in
-  assert_equal encoded (Imposter.Protocol.encode_server msg);
-  assert_equal (Ok msg) (Imposter.Protocol.decode_server encoded);
-  assert_equal "{\"type\":\"score_update\",\"count\":0}"
+  assert_equal ~printer:pp_string encoded (Imposter.Protocol.encode_server msg);
+  assert_equal ~printer:(pp_result pp_server_msg) (Ok msg)
+    (Imposter.Protocol.decode_server encoded);
+  assert_equal ~printer:pp_string "{\"type\":\"score_update\",\"count\":0}"
     (Imposter.Protocol.encode_server (Imposter.Protocol.ScoreUpdate []));
-  assert_equal (Ok (Imposter.Protocol.ScoreUpdate []))
+  assert_equal ~printer:(pp_result pp_server_msg)
+    (Ok (Imposter.Protocol.ScoreUpdate []))
     (Imposter.Protocol.decode_server "{\"type\":\"score_update\",\"count\":0}")
 
 let test_protocol_sanitizes_all_client_string_fields _ =
@@ -692,7 +724,8 @@ let test_protocol_sanitizes_all_client_string_fields _ =
       let encoded = Imposter.Protocol.encode_client msg in
       assert_bool "quote and slash sanitized"
         (not (String.contains encoded '\\'));
-      assert_equal expected (Imposter.Protocol.decode_client encoded))
+      assert_equal ~printer:(pp_result pp_client_msg) expected
+        (Imposter.Protocol.decode_client encoded))
     cases
 
 let test_protocol_sanitizes_all_server_string_fields _ =
@@ -720,7 +753,8 @@ let test_protocol_sanitizes_all_server_string_fields _ =
       let encoded = Imposter.Protocol.encode_server msg in
       assert_bool "encoded string should stay one line"
         (not (String.contains encoded '\n'));
-      assert_equal expected (Imposter.Protocol.decode_server encoded))
+      assert_equal ~printer:(pp_result pp_server_msg) expected
+        (Imposter.Protocol.decode_server encoded))
     cases
 
 let test_protocol_sanitizes_nested_round_and_score_fields _ =
@@ -734,7 +768,7 @@ let test_protocol_sanitizes_nested_round_and_score_fields _ =
         clue_order = [ "G\tH" ];
       }
   in
-  assert_equal
+  assert_equal ~printer:(pp_result pp_server_msg)
     (Ok
        (Imposter.Protocol.RoundStart
           {
@@ -757,7 +791,7 @@ let test_protocol_sanitizes_nested_round_and_score_fields _ =
         };
       ]
   in
-  assert_equal
+  assert_equal ~printer:(pp_result pp_server_msg)
     (Ok
        (Imposter.Protocol.ScoreUpdate
           [
@@ -772,29 +806,34 @@ let test_protocol_sanitizes_nested_round_and_score_fields _ =
     (Imposter.Protocol.decode_server (Imposter.Protocol.encode_server score))
 
 let test_protocol_duplicate_fields_last_textual_field_wins _ =
-  assert_equal (Ok (Imposter.Protocol.Join "second"))
+  assert_equal ~printer:(pp_result pp_client_msg)
+    (Ok (Imposter.Protocol.Join "second"))
     (Imposter.Protocol.decode_client
        "{\"type\":\"join\",\"name\":\"first\",\"name\":\"second\"}");
-  assert_equal (Ok (Imposter.Protocol.Clue "actual"))
+  assert_equal ~printer:(pp_result pp_client_msg)
+    (Ok (Imposter.Protocol.Clue "actual"))
     (Imposter.Protocol.decode_client
        "{\"type\":\"join\",\"name\":\"Ada\",\"type\":\"clue\",\"clue\":\"actual\"}");
-  assert_equal (Ok (Imposter.Protocol.ServerShutdown "new"))
+  assert_equal ~printer:(pp_result pp_server_msg)
+    (Ok (Imposter.Protocol.ServerShutdown "new"))
     (Imposter.Protocol.decode_server
        "{\"type\":\"error\",\"message\":\"old\",\"type\":\"shutdown\",\"message\":\"new\"}")
 
 let test_protocol_trailing_text_is_ignored _ =
-  assert_equal (Ok Imposter.Protocol.Start)
+  assert_equal ~printer:(pp_result pp_client_msg) (Ok Imposter.Protocol.Start)
     (Imposter.Protocol.decode_client "{\"type\":\"start\"} trailing");
-  assert_equal (Ok (Imposter.Protocol.Vote "Ada"))
+  assert_equal ~printer:(pp_result pp_client_msg)
+    (Ok (Imposter.Protocol.Vote "Ada"))
     (Imposter.Protocol.decode_client
        "{\"type\":\"vote\",\"voted_for\":\"Ada\"}{\"type\":\"start\"}");
-  assert_equal (Ok Imposter.Protocol.YourTurnClue)
+  assert_equal ~printer:(pp_result pp_server_msg)
+    (Ok Imposter.Protocol.YourTurnClue)
     (Imposter.Protocol.decode_server "{\"type\":\"your_turn_clue\"}\nnot parsed")
 
 let test_protocol_allows_space_and_tab_whitespace_only _ =
-  assert_equal (Ok Imposter.Protocol.Start)
+  assert_equal ~printer:(pp_result pp_client_msg) (Ok Imposter.Protocol.Start)
     (Imposter.Protocol.decode_client " \t{\"type\"\t:\t\"start\"\t}\t ");
-  assert_equal
+  assert_equal ~printer:(pp_result pp_server_msg)
     (Ok (Imposter.Protocol.LobbyUpdate [ "Ada"; "Grace" ]))
     (Imposter.Protocol.decode_server
        "\t { \t \"type\" : \"lobby\" , \"players\" : [ \"Ada\" , \t\"Grace\" ] \
@@ -804,11 +843,11 @@ let test_protocol_allows_space_and_tab_whitespace_only _ =
     (Imposter.Protocol.decode_server "{\"type\":\"lobby\",\n\"players\":[]}")
 
 let test_protocol_list_parser_preserves_order _ =
-  assert_equal
+  assert_equal ~printer:(pp_result pp_server_msg)
     (Ok (Imposter.Protocol.LobbyUpdate [ "one"; "two"; "three"; "four" ]))
     (Imposter.Protocol.decode_server
        "{\"type\":\"lobby\",\"players\":[\"one\",\"two\",\"three\",\"four\"]}");
-  assert_equal
+  assert_equal ~printer:(pp_result pp_server_msg)
     (Ok
        (Imposter.Protocol.RoundStart
           {
@@ -822,7 +861,7 @@ let test_protocol_list_parser_preserves_order _ =
        "{\"type\":\"round_start\",\"category\":\"x\",\"role\":\"crew\",\"word\":\"y\",\"players\":[\"p1\",\"p2\",\"p3\"],\"clue_order\":[\"p3\",\"p1\",\"p2\"]}")
 
 let test_protocol_int_parser_score_update_edges _ =
-  assert_equal
+  assert_equal ~printer:(pp_result pp_server_msg)
     (Ok
        (Imposter.Protocol.ScoreUpdate
           [
@@ -1019,7 +1058,7 @@ let test_round_trip_many_scoreboard_sizes _ =
     (fun n ->
       let entries = List.init n make_entry in
       let msg = Imposter.Protocol.ScoreUpdate entries in
-      assert_equal (Ok msg)
+      assert_equal ~printer:(pp_result pp_server_msg) (Ok msg)
         (Imposter.Protocol.decode_server (Imposter.Protocol.encode_server msg)))
     [ 0; 1; 2; 3; 5; 10 ]
 
@@ -1038,7 +1077,7 @@ let test_round_trip_many_round_start_variants _ =
         Imposter.Protocol.RoundStart
           { category = "x"; role; word; players; clue_order }
       in
-      assert_equal (Ok msg)
+      assert_equal ~printer:(pp_result pp_server_msg) (Ok msg)
         (Imposter.Protocol.decode_server (Imposter.Protocol.encode_server msg)))
     cases
 
@@ -1051,7 +1090,7 @@ let test_client_round_trip_sanitized_payload_matrix _ =
           let encoded = Imposter.Protocol.encode_client (make_msg payload) in
           assert_bool "no encoded newlines" (not (String.contains encoded '\n'));
           assert_bool "encoded as object" (String.length encoded >= 2);
-          assert_equal '{' encoded.[0])
+          assert_equal ~printer:pp_char '{' encoded.[0])
         [
           (fun s -> Imposter.Protocol.Join s);
           (fun s -> Imposter.Protocol.Clue s);
@@ -1069,7 +1108,7 @@ let test_server_round_trip_sanitized_payload_matrix _ =
           let encoded = Imposter.Protocol.encode_server msg in
           assert_bool "no encoded newlines" (not (String.contains encoded '\n'));
           assert_bool "encoded object" (String.length encoded >= 2);
-          assert_equal '{' encoded.[0])
+          assert_equal ~printer:pp_char '{' encoded.[0])
         [
           Imposter.Protocol.Welcome payload;
           Imposter.Protocol.Error payload;

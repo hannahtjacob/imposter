@@ -21,7 +21,7 @@ title: "Imposter: The Social Word Deduction Game"
 # OK if this is a Cornell Github link, but public gallery viewers won't be able to see it.
 git-repo: "https://github.coecis.cornell.edu/htj7/cs3110-project"
 # Replace the URL with your own demo video.
-demo-video-url: https://youtu.be/xeREy-6ZXhE
+demo-video-url: "https://youtu.be/xeREy-6ZXhE"
 # Write a short, attention-grabbing description of your project.
 desc: >
   Imposter is a word-guessing game where you're the imposter — you don't know
