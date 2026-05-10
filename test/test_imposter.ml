@@ -2,7 +2,6 @@ open OUnit2
 
 let pp_string_list xs = "[" ^ String.concat "; " xs ^ "]"
 let pp_string s = s
-let pp_int = string_of_int
 let pp_char c = String.make 1 c
 
 let pp_guess = function
