@@ -141,24 +141,24 @@ let test_hint_filtering _ =
        ~hint:"missing" ~guess:"banana")
 
 let test_decode_client_manual_inputs _ =
-  assert_ok_equal (Imposter.Protocol.Join "Ada")
+  assert_ok_equal ~printer:pp_client_msg (Imposter.Protocol.Join "Ada")
     (Imposter.Protocol.decode_client
        " \t { \t \"name\" : \"Ada\" , \"type\" : \"join\" }");
-  assert_ok_equal Imposter.Protocol.Start
+  assert_ok_equal ~printer:pp_client_msg Imposter.Protocol.Start
     (Imposter.Protocol.decode_client
        "{\"ignored\":\"field\",\"type\":\"start\"}");
-  assert_ok_equal (Imposter.Protocol.PlayAgain false)
+  assert_ok_equal ~printer:pp_client_msg (Imposter.Protocol.PlayAgain false)
     (Imposter.Protocol.decode_client "{\"yes\":false,\"type\":\"play_again\"}");
-  assert_ok_equal (Imposter.Protocol.Clue "one")
+  assert_ok_equal ~printer:pp_client_msg (Imposter.Protocol.Clue "one")
     (Imposter.Protocol.decode_client
        "{\"type\":\"clue\",\"clue\":\"one\"} trailing text")
 
 let test_decode_server_manual_inputs _ =
-  assert_ok_equal
+  assert_ok_equal ~printer:pp_server_msg
     (Imposter.Protocol.LobbyUpdate [ "Ada"; "Grace" ])
     (Imposter.Protocol.decode_server
        " { \"players\" : [ \"Ada\" , \"Grace\" ] , \"type\" : \"lobby\" }");
-  assert_ok_equal
+  assert_ok_equal ~printer:pp_server_msg
     (Imposter.Protocol.RoundStart
        {
          category = "Fruits";
@@ -169,7 +169,7 @@ let test_decode_server_manual_inputs _ =
        })
     (Imposter.Protocol.decode_server
        "{\"type\":\"round_start\",\"category\":\"Fruits\",\"role\":\"crew\",\"word\":\"apple\",\"players\":[],\"clue_order\":[]}");
-  assert_ok_equal
+  assert_ok_equal ~printer:pp_server_msg
     (Imposter.Protocol.ScoreUpdate
        [
          {
@@ -182,7 +182,8 @@ let test_decode_server_manual_inputs _ =
        ])
     (Imposter.Protocol.decode_server
        "{\"type\":\"score_update\",\"count\":1,\"p0\":\"Ada\",\"cw0\":-1,\"iw0\":2,\"tc0\":0,\"rp0\":3}");
-  assert_ok_equal (Imposter.Protocol.ServerShutdown "bye")
+  assert_ok_equal ~printer:pp_server_msg
+    (Imposter.Protocol.ServerShutdown "bye")
     (Imposter.Protocol.decode_server
        "{\"message\":\"bye\",\"type\":\"shutdown\"} ignored")
 
